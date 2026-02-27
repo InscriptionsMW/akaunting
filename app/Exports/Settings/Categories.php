@@ -3,19 +3,23 @@
 namespace App\Exports\Settings;
 
 use App\Abstracts\Export;
+use App\Http\Requests\Setting\Category as Request;
 use App\Models\Setting\Category as Model;
 
 class Categories extends Export
 {
+    public $request_class = Request::class;
+
     public function collection()
     {
-        $model = Model::usingSearchString(request('search'));
+        return Model::collectForExport($this->ids);
+    }
 
-        if (!empty($this->ids)) {
-            $model->whereIn('id', (array) $this->ids);
-        }
+    public function map($model): array
+    {
+        $model->parent_name = Model::find($model->parent_id)?->name;
 
-        return $model->cursor();
+        return parent::map($model);
     }
 
     public function fields(): array
@@ -24,6 +28,7 @@ class Categories extends Export
             'name',
             'type',
             'color',
+            'parent_name',
             'enabled',
         ];
     }

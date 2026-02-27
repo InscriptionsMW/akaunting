@@ -7,6 +7,7 @@ use App\Jobs\Common\CreateContact;
 use App\Models\Common\Contact;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\File;
+use Maatwebsite\Excel\Facades\Excel;
 use Tests\Feature\FeatureTestCase;
 
 class VendorsTest extends FeatureTestCase
@@ -17,6 +18,18 @@ class VendorsTest extends FeatureTestCase
             ->get(route('vendors.index'))
             ->assertStatus(200)
             ->assertSeeText(trans_choice('general.vendors', 2));
+    }
+
+    public function testItShouldSeeVendorShowPage()
+    {
+        $request = $this->getRequest();
+
+        $vendor = $this->dispatch(new CreateContact($request));
+
+        $this->loginAs()
+            ->get(route('vendors.show', $vendor->id))
+            ->assertStatus(200)
+            ->assertSee($vendor->email);
     }
 
     public function testItShouldSeeVendorCreatePage()
@@ -72,7 +85,7 @@ class VendorsTest extends FeatureTestCase
 
         $vendor = $this->dispatch(new CreateContact($request));
 
-        $request['email'] = $this->faker->safeEmail;
+        $request['email'] = $this->faker->freeEmail;
 
         $this->loginAs()
             ->patch(route('vendors.update', $vendor->id), $request)
@@ -101,17 +114,19 @@ class VendorsTest extends FeatureTestCase
 
     public function testItShouldExportVendors()
     {
-        $count = 5;
-        Contact::factory()->vendor()->count($count)->create();
+        Contact::factory()->vendor()->count(5)->create();
+        $count = Contact::vendor()->count();
 
-        \Excel::fake();
+        Excel::fake();
 
         $this->loginAs()
             ->get(route('vendors.export'))
             ->assertStatus(200);
 
-        \Excel::assertDownloaded(
-            \Str::filename(trans_choice('general.vendors', 2)) . '.xlsx',
+        Excel::matchByRegex();
+
+        Excel::assertDownloaded(
+            '/' . str()->filename(trans_choice('general.vendors', 2)) . '-\d{10}\.xlsx/',
             function (Export $export) use ($count) {
                 // Assert that the correct export is downloaded.
                 return $export->collection()->count() === $count;
@@ -121,29 +136,33 @@ class VendorsTest extends FeatureTestCase
 
     public function testItShouldExportSelectedVendors()
     {
-        $count = 5;
-        $vendors = Contact::factory()->vendor()->count($count)->create();
+        $create_count = 5;
+        $select_count = 3;
 
-        \Excel::fake();
+        $vendors = Contact::factory()->vendor()->count($create_count)->create();
+
+        Excel::fake();
 
         $this->loginAs()
             ->post(
                 route('bulk-actions.action', ['group' => 'purchases', 'type' => 'vendors']),
-                ['handle' => 'export', 'selected' => [$vendors->random()->id]]
+                ['handle' => 'export', 'selected' => $vendors->take($select_count)->pluck('id')->toArray()]
             )
             ->assertStatus(200);
 
-        \Excel::assertDownloaded(
-            \Str::filename(trans_choice('general.vendors', 2)) . '.xlsx',
-            function (Export $export) {
-                return $export->collection()->count() === 1;
+        Excel::matchByRegex();
+
+        Excel::assertDownloaded(
+            '/' . str()->filename(trans_choice('general.vendors', 2)) . '-\d{10}\.xlsx/',
+            function (Export $export) use ($select_count) {
+                return $export->collection()->count() === $select_count;
             }
         );
     }
 
     public function testItShouldImportVendors()
     {
-        \Excel::fake();
+        Excel::fake();
 
         $this->loginAs()
             ->post(
@@ -157,7 +176,7 @@ class VendorsTest extends FeatureTestCase
             )
             ->assertStatus(200);
 
-        \Excel::assertImported('vendors.xlsx');
+        Excel::assertImported('vendors.xlsx');
 
         $this->assertFlashLevel('success');
     }

@@ -13,6 +13,7 @@ class AddVendors extends Listener
     protected $classes = [
         'App\Reports\ExpenseSummary',
         'App\Reports\IncomeExpenseSummary',
+        'App\Reports\DiscountSummary',
     ];
 
     /**
@@ -28,7 +29,8 @@ class AddVendors extends Listener
         }
 
         $event->class->filters['vendors'] = $this->getVendors(true);
-        $event->class->filters['routes']['vendors'] = 'vendors.index';
+        $event->class->filters['routes']['vendors'] = ['vendors.index', 'search=enabled:1'];
+        $event->class->filters['multiple']['vendors'] = true;
     }
 
     /**

@@ -2,11 +2,14 @@
 
 namespace Tests\Feature\Purchases;
 
-use App\Exports\Purchases\Bills as Export;
+use App\Exports\Purchases\Bills\Bills as Export;
 use App\Jobs\Document\CreateDocument;
 use App\Models\Document\Document;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
+use Maatwebsite\Excel\Facades\Excel;
 use Tests\Feature\FeatureTestCase;
 
 class BillsTest extends FeatureTestCase
@@ -17,6 +20,18 @@ class BillsTest extends FeatureTestCase
             ->get(route('bills.index'))
             ->assertStatus(200)
             ->assertSeeText(trans_choice('general.bills', 2));
+    }
+
+    public function testItShouldSeeBillShowPage()
+    {
+        $request = $this->getRequest();
+
+        $bill = $this->dispatch(new CreateDocument($request));
+
+        $this->loginAs()
+            ->get(route('bills.show', $bill->id))
+            ->assertStatus(200)
+            ->assertSee($bill->contact_email);
     }
 
     public function testItShouldSeeBillCreatePage()
@@ -42,9 +57,21 @@ class BillsTest extends FeatureTestCase
         ]);
     }
 
-    public function testItShouldCreateBillWithRecurring()
+    public function testItShouldCreateBillWithAttachment()
     {
-        $request = $this->getRequest(true);
+        Storage::fake('uploads');
+        Carbon::setTestNow(Carbon::create(2021, 05, 15));
+
+        $file = new UploadedFile(
+            base_path('public/img/empty_pages/bills.png'),
+            'bills.png',
+            'image/png',
+            null,
+            true
+        );
+
+        $request = $this->getRequest();
+        $request['attachment'] = [$file];
 
         $this->loginAs()
             ->post(route('bills.store'), $request)
@@ -52,7 +79,39 @@ class BillsTest extends FeatureTestCase
 
         $this->assertFlashLevel('success');
 
+        Storage::disk('uploads')->assertExists('2021/05/15/1/bills/bills.png');
+
         $this->assertDatabaseHas('documents', [
+            'document_number' => $request['document_number']
+        ]);
+
+        $this->assertDatabaseHas('mediables', [
+            'mediable_type' => Document::class,
+            'tag'           => 'attachment',
+        ]);
+
+        $this->assertDatabaseHas('media', [
+            'disk'           => 'uploads',
+            'directory'      => '2021/05/15/1/bills',
+            'filename'       => 'bills',
+            'extension'      => 'png',
+            'mime_type'      => 'image/png',
+            'aggregate_type' => 'image',
+        ]);
+    }
+
+    public function testItShouldCreateBillWithRecurring()
+    {
+        $request = $this->getRequest(true);
+
+        $this->loginAs()
+            ->post(route('recurring-bills.store'), $request)
+            ->assertStatus(200);
+
+        $this->assertFlashLevel('success');
+
+        $this->assertDatabaseHas('documents', [
+            'type' => Document::BILL_RECURRING_TYPE,
             'document_number' => $request['document_number'],
         ]);
     }
@@ -112,46 +171,52 @@ class BillsTest extends FeatureTestCase
         $count = 5;
         Document::factory()->bill()->count($count)->create();
 
-        \Excel::fake();
+        Excel::fake();
 
         $this->loginAs()
             ->get(route('bills.export'))
             ->assertStatus(200);
 
-        \Excel::assertDownloaded(
-            \Str::filename(trans_choice('general.bills', 2)) . '.xlsx',
+        Excel::matchByRegex();
+
+        Excel::assertDownloaded(
+            '/' . str()->filename(trans_choice('general.bills', 2)) . '-\d{10}\.xlsx/',
             function (Export $export) use ($count) {
                 // Assert that the correct export is downloaded.
-                return $export->sheets()['bills']->collection()->count() === $count;
+                return $export->sheets()[0]->collection()->count() === $count;
             }
         );
     }
 
     public function testItShouldExportSelectedBills()
     {
-        $count = 5;
-        $bills = Document::factory()->bill()->count($count)->create();
+        $create_count = 5;
+        $select_count = 3;
 
-        \Excel::fake();
+        $bills = Document::factory()->bill()->count($create_count)->create();
+
+        Excel::fake();
 
         $this->loginAs()
             ->post(
                 route('bulk-actions.action', ['group' => 'purchases', 'type' => 'bills']),
-                ['handle' => 'export', 'selected' => [$bills->random()->id]]
+                ['handle' => 'export', 'selected' => $bills->take($select_count)->pluck('id')->toArray()]
             )
             ->assertStatus(200);
 
-        \Excel::assertDownloaded(
-            \Str::filename(trans_choice('general.bills', 2)) . '.xlsx',
-            function (Export $export) {
-                return $export->sheets()['bills']->collection()->count() === 1;
+        Excel::matchByRegex();
+
+        Excel::assertDownloaded(
+            '/' . str()->filename(trans_choice('general.bills', 2)) . '-\d{10}\.xlsx/',
+            function (Export $export) use ($select_count) {
+                return $export->sheets()[0]->collection()->count() === $select_count;
             }
         );
     }
 
     public function testItShouldImportBills()
     {
-        \Excel::fake();
+        Excel::fake();
 
         $this->loginAs()
             ->post(
@@ -165,7 +230,7 @@ class BillsTest extends FeatureTestCase
             )
             ->assertStatus(200);
 
-        \Excel::assertImported('bills.xlsx');
+        Excel::assertImported('bills.xlsx');
 
         $this->assertFlashLevel('success');
     }

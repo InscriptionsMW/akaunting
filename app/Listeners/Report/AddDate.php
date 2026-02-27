@@ -14,6 +14,7 @@ class AddDate extends Listener
         'App\Reports\IncomeExpenseSummary',
         'App\Reports\ProfitLoss',
         'App\Reports\TaxSummary',
+        'App\Reports\DiscountSummary',
     ];
 
     /**
@@ -28,7 +29,7 @@ class AddDate extends Listener
             return;
         }
 
-        $event->class->filters['years'] = $this->getYears();
+        $this->setDateFilter($event);
     }
 
     /**

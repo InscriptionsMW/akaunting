@@ -6,6 +6,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Support\HtmlString;
 
 class ExportFailed extends Notification implements ShouldQueue
 {
@@ -14,18 +15,18 @@ class ExportFailed extends Notification implements ShouldQueue
     /**
      * The error exception.
      *
-     * @var object
+     * @var string
      */
-    public $exception;
+    public $message;
 
     /**
      * Create a notification instance.
      *
-     * @param  object  $exception
+     * @param  string  $message
      */
-    public function __construct($exception)
+    public function __construct($message)
     {
-        $this->exception = $exception;
+        $this->message = $message;
 
         $this->onQueue('notifications');
     }
@@ -38,7 +39,7 @@ class ExportFailed extends Notification implements ShouldQueue
      */
     public function via($notifiable)
     {
-        return ['mail'];
+        return ['mail', 'database'];
     }
 
     /**
@@ -47,11 +48,30 @@ class ExportFailed extends Notification implements ShouldQueue
      * @param  mixed  $notifiable
      * @return \Illuminate\Notifications\Messages\MailMessage
      */
-    public function toMail($notifiable)
+    public function toMail($notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject(trans('notifications.export.failed.subject'))
+            ->from(config('mail.from.address'), config('mail.from.name'))
+            ->subject(trans('notifications.export.failed.title'))
+            ->line(new HtmlString('<br><br>'))
             ->line(trans('notifications.export.failed.description'))
-            ->line($this->exception->getMessage());
+            ->line(new HtmlString('<br><br>'))
+            ->line($this->message)
+            ->line(new HtmlString('<br><br>'));
+    }
+
+    /**
+     * Get the array representation of the notification.
+     *
+     * @param  mixed  $notifiable
+     * @return array
+     */
+    public function toArray($notifiable)
+    {
+        return [
+            'title' => trans('notifications.menu.export_failed.title'),
+            'description' => trans('notifications.menu.export_failed.description'),
+            'message' => $this->message,
+        ];
     }
 }

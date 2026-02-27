@@ -44,7 +44,7 @@ class UpdateExtraModules
             }
 
             $installed_version = $extra_module->get('version');
-            $latest_version = Versions::latest($alias);
+            $latest_version = Versions::latest($alias)?->latest;
 
             // Skip if no update available
             if (version_compare($installed_version, $latest_version, '>=')) {
@@ -58,7 +58,7 @@ class UpdateExtraModules
             if (true !== $result = Console::run($command)) {
                 $message = !empty($result) ? $result : trans('modules.errors.finish', ['module' => $alias]);
 
-                logger($message);
+                report($message);
 
                 // Stop the propagation of event if the required module failed to update
                 return false;

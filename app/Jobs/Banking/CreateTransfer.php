@@ -3,37 +3,22 @@
 namespace App\Jobs\Banking;
 
 use App\Abstracts\Job;
+use App\Interfaces\Job\HasOwner;
+use App\Interfaces\Job\HasSource;
+use App\Interfaces\Job\ShouldCreate;
+use App\Jobs\Banking\CreateTransaction;
 use App\Models\Banking\Account;
-use App\Models\Banking\Transaction;
 use App\Models\Banking\Transfer;
-use App\Models\Setting\Category;
-use App\Models\Setting\Currency;
+use App\Models\Banking\Transaction;
+use App\Traits\Categories;
 use App\Traits\Currencies;
+use App\Traits\Transactions;
 
-class CreateTransfer extends Job
+class CreateTransfer extends Job implements HasOwner, HasSource, ShouldCreate
 {
-    use Currencies;
+    use Categories, Currencies, Transactions;
 
-    protected $transfer;
-
-    protected $request;
-
-    /**
-     * Create a new job instance.
-     *
-     * @param  $request
-     */
-    public function __construct($request)
-    {
-        $this->request = $this->getRequestInstance($request);
-    }
-
-    /**
-     * Execute the job.
-     *
-     * @return Transfer
-     */
-    public function handle()
+    public function handle(): Transfer
     {
         \DB::transaction(function () {
             $expense_currency_code = $this->getCurrencyCode('from');
@@ -42,9 +27,10 @@ class CreateTransfer extends Job
             $expense_currency_rate = $this->getCurrencyRate('from');
             $income_currency_rate = $this->getCurrencyRate('to');
 
-            $expense_transaction = Transaction::create([
+            $expense_transaction = $this->dispatch(new CreateTransaction([
                 'company_id' => $this->request['company_id'],
-                'type' => 'expense',
+                'type' => Transaction::EXPENSE_TRANSFER_TYPE,
+                'number' => $this->getNextTransactionNumber(),
                 'account_id' => $this->request->get('from_account_id'),
                 'paid_at' => $this->request->get('transferred_at'),
                 'currency_code' => $expense_currency_code,
@@ -52,10 +38,12 @@ class CreateTransfer extends Job
                 'amount' => $this->request->get('amount'),
                 'contact_id' => 0,
                 'description' => $this->request->get('description'),
-                'category_id' => Category::transfer(), // Transfer Category ID
+                'category_id' => $this->getTransferCategoryId(),
                 'payment_method' => $this->request->get('payment_method'),
                 'reference' => $this->request->get('reference'),
-            ]);
+                'created_from' => $this->request->get('created_from'),
+                'created_by' => $this->request->get('created_by'),
+            ]));
 
             $amount = $this->request->get('amount');
 
@@ -64,9 +52,10 @@ class CreateTransfer extends Job
                 $amount = $this->convertBetween($amount, $expense_currency_code, $expense_currency_rate, $income_currency_code, $income_currency_rate);
             }
 
-            $income_transaction = Transaction::create([
+            $income_transaction = $this->dispatch(new CreateTransaction([
                 'company_id' => $this->request['company_id'],
-                'type' => 'income',
+                'type' => Transaction::INCOME_TRANSFER_TYPE,
+                'number' => $this->getNextTransactionNumber(),
                 'account_id' => $this->request->get('to_account_id'),
                 'paid_at' => $this->request->get('transferred_at'),
                 'currency_code' => $income_currency_code,
@@ -74,19 +63,32 @@ class CreateTransfer extends Job
                 'amount' => $amount,
                 'contact_id' => 0,
                 'description' => $this->request->get('description'),
-                'category_id' => Category::transfer(), // Transfer Category ID
+                'category_id' => $this->getTransferCategoryId(),
                 'payment_method' => $this->request->get('payment_method'),
                 'reference' => $this->request->get('reference'),
-            ]);
+                'created_from' => $this->request->get('created_from'),
+                'created_by' => $this->request->get('created_by'),
+            ]));
 
-            $this->transfer = Transfer::create([
+            $this->model = Transfer::create([
                 'company_id' => $this->request['company_id'],
                 'expense_transaction_id' => $expense_transaction->id,
                 'income_transaction_id' => $income_transaction->id,
+                'created_from' => $this->request->get('created_from'),
+                'created_by' => $this->request->get('created_by'),
             ]);
+
+            // Upload attachment
+            if ($this->request->file('attachment')) {
+                foreach ($this->request->file('attachment') as $attachment) {
+                    $media = $this->getMedia($attachment, 'transfers');
+
+                    $this->model->attachMedia($media, 'attachment');
+                }
+            }
         });
 
-        return $this->transfer;
+        return $this->model;
     }
 
     protected function getCurrencyCode($type)
@@ -105,7 +107,7 @@ class CreateTransfer extends Job
         $currency_rate = $this->request->get($type . '_account_rate');
 
         if (empty($currency_rate)) {
-            $currency_rate = config('money.' . $this->getCurrencyCode($type) . '.rate');
+            $currency_rate = currency($this->getCurrencyCode($type))->getRate();
         }
 
         return $currency_rate;

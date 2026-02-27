@@ -63,7 +63,7 @@ return [
         'title'             => 'Titel',
         'subheading'        => 'Undertitel',
         'due_receipt'       => 'Forfalder ved modtagelse',
-        'due_days'          => 'Forfalder om :days dage',
+        'due_days'          => 'Forfalder efter :days dage',
         'choose_template'   => 'Vælg faktura skabelon',
         'default'           => 'Standard',
         'classic'           => 'Klassisk',
@@ -75,6 +75,12 @@ return [
             'price'             => 'Skjul pris',
             'amount'            => 'Skjul beløb',
         ],
+    ],
+
+    'transfer' => [
+        'choose_template'   => 'Vælg overførselsskabelon',
+        'second'            => 'Anden',
+        'third'             => 'Tredje',
     ],
 
     'default' => [
@@ -115,6 +121,7 @@ return [
             'invoice_payment_admin'     => 'Skabelon for modtaget betaling (sendt til administrator)',
             'bill_remind_admin'         => 'Skabelon for regningspåmindelse (sendt til administrator)',
             'bill_recur_admin'          => 'Skabelon for tilbagevendende regning (sendt til administrator)',
+            'revenue_new_customer'      => 'Skabelon for modtaget betaling (sendt til kunder)',
         ],
     ],
 

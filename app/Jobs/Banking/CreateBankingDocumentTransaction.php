@@ -3,43 +3,34 @@
 namespace App\Jobs\Banking;
 
 use App\Abstracts\Job;
+use App\Events\Banking\DocumentTransactionCreated;
+use App\Events\Banking\DocumentTransactionCreating;
 use App\Jobs\Banking\CreateTransaction;
 use App\Jobs\Document\CreateDocumentHistory;
 use App\Events\Document\PaidAmountCalculated;
+use App\Interfaces\Job\ShouldCreate;
 use App\Models\Banking\Transaction;
 use App\Models\Document\Document;
 use App\Traits\Currencies;
-use Date;
+use App\Utilities\Date;
 
-class CreateBankingDocumentTransaction extends Job
+class CreateBankingDocumentTransaction extends Job implements ShouldCreate
 {
     use Currencies;
 
-    protected $model;
-
-    protected $request;
-
     protected $transaction;
 
-    /**
-     * Create a new job instance.
-     *
-     * @param  $model
-     * @param  $request
-     */
-    public function __construct($model, $request)
+    public function __construct(Document $model, $request)
     {
         $this->model = $model;
-        $this->request = $this->getRequestInstance($request);
+
+        parent::__construct($request);
     }
 
-    /**
-     * Execute the job.
-     *
-     * @return Transaction
-     */
-    public function handle()
+    public function handle(): Transaction
     {
+        event(new DocumentTransactionCreating($this->model, $this->request));
+
         $this->prepareRequest();
 
         $this->checkAmount();
@@ -47,22 +38,17 @@ class CreateBankingDocumentTransaction extends Job
         \DB::transaction(function () {
             $this->transaction = $this->dispatch(new CreateTransaction($this->request));
 
-            // Upload attachment
-            if ($this->request->file('attachment')) {
-                $media = $this->getMedia($this->request->file('attachment'), 'transactions');
-
-                $this->transaction->attachMedia($media, 'attachment');
-            }
-
             $this->model->save();
 
             $this->createHistory();
         });
 
+        event(new DocumentTransactionCreated($this->model, $this->transaction));
+
         return $this->transaction;
     }
 
-    protected function prepareRequest()
+    protected function prepareRequest(): void
     {
         if (!isset($this->request['amount'])) {
             $this->model->paid_amount = $this->model->paid;
@@ -74,9 +60,9 @@ class CreateBankingDocumentTransaction extends Job
         $currency_code = !empty($this->request['currency_code']) ? $this->request['currency_code'] : $this->model->currency_code;
 
         $this->request['company_id'] = $this->model->company_id;
-        $this->request['currency_code'] = isset($this->request['currency_code']) ? $this->request['currency_code'] : $this->model->currency_code;
-        $this->request['paid_at'] = isset($this->request['paid_at']) ? $this->request['paid_at'] : Date::now()->format('Y-m-d');
-        $this->request['currency_rate'] = config('money.' . $currency_code . '.rate');
+        $this->request['currency_code'] = $currency_code;
+        $this->request['paid_at'] = isset($this->request['paid_at']) ? $this->request['paid_at'] : Date::now()->toDateTimeString();
+        $this->request['currency_rate'] = isset($this->request['currency_rate']) ? $this->request['currency_rate'] : currency($currency_code)->getRate();
         $this->request['account_id'] = isset($this->request['account_id']) ? $this->request['account_id'] : setting('default.account');
         $this->request['document_id'] = isset($this->request['document_id']) ? $this->request['document_id'] : $this->model->id;
         $this->request['contact_id'] = isset($this->request['contact_id']) ? $this->request['contact_id'] : $this->model->contact_id;
@@ -85,11 +71,12 @@ class CreateBankingDocumentTransaction extends Job
         $this->request['notify'] = isset($this->request['notify']) ? $this->request['notify'] : 0;
     }
 
-    protected function checkAmount()
+    protected function checkAmount(): bool
     {
         $code = $this->request['currency_code'];
         $rate = $this->request['currency_rate'];
-        $precision = config('money.' . $code . '.precision');
+
+        $precision = currency($code)->getPrecision();
 
         $amount = $this->request['amount'] = round($this->request['amount'], $precision);
 
@@ -110,17 +97,13 @@ class CreateBankingDocumentTransaction extends Job
         $compare = bccomp($amount, $total_amount, $precision);
 
         if ($compare === 1) {
-            $error_amount = $total_amount;
+            if ($this->model->currency_code == $code) {
+                $message = trans('messages.error.over_payment', ['amount' => money($total_amount, $code)]);
 
-            if ($this->model->currency_code != $code) {
-                $converted_amount = $this->convertBetween($total_amount, $this->model->currency_code, $this->model->currency_rate, $code, $rate);
-
-                $error_amount = round($converted_amount, $precision);
+                throw new \Exception($message);
+            } else {
+                $this->model->status = 'paid';
             }
-
-            $message = trans('messages.error.over_payment', ['amount' => money($error_amount, $code, true)]);
-
-            throw new \Exception($message);
         } else {
             $this->model->status = ($compare === 0) ? 'paid' : 'partial';
         }
@@ -128,9 +111,9 @@ class CreateBankingDocumentTransaction extends Job
         return true;
     }
 
-    protected function createHistory()
+    protected function createHistory(): void
     {
-        $history_desc = money((double) $this->transaction->amount, (string) $this->transaction->currency_code, true)->format() . ' ' . trans_choice('general.payments', 1);
+        $history_desc = money((double) $this->transaction->amount, (string) $this->transaction->currency_code)->format() . ' ' . trans_choice('general.payments', 1);
 
         $this->dispatch(new CreateDocumentHistory($this->model, 0, $history_desc));
     }

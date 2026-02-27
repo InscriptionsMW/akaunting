@@ -3,12 +3,15 @@
 namespace App\Providers;
 
 use App\Notifications\Common\ImportFailed;
+use App\Traits\Modules;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\ServiceProvider as Provider;
 
 class Queue extends Provider
 {
+    use Modules;
+
     /**
      * Register any application services.
      *
@@ -39,7 +42,7 @@ class Queue extends Provider
         app('events')->listen(JobProcessing::class, function ($event) {
             $payload = $event->job->payload();
 
-            if (!array_key_exists('company_id', $payload)) {
+            if (! array_key_exists('company_id', $payload)) {
                 return;
             }
 
@@ -47,9 +50,16 @@ class Queue extends Provider
 
             if (empty($company)) {
                 $event->job->delete();
+
+                throw new \Exception('Company not found. Payload: ' . json_encode($payload));
             }
 
             $company->makeCurrent();
+
+            // TODO: Move queue control at the beginning of the closure
+            if (should_queue()) {
+                $this->registerModules();
+            }
         });
 
         app('events')->listen(JobFailed::class, function ($event) {
@@ -78,7 +88,7 @@ class Queue extends Provider
             // Get import class
             $class = $ref->getValue($excel_job);
 
-            if (!$class instanceof \App\Abstracts\Import) {
+            if (!$class instanceof \App\Abstracts\Import && !$class instanceof \App\Abstracts\ImportMultipleSheets) {
                 return;
             }
 

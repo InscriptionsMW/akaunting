@@ -6,10 +6,15 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Support\HtmlString;
 
 class ExportCompleted extends Notification implements ShouldQueue
 {
     use Queueable;
+
+    protected $translation;
+
+    protected $file_name;
 
     protected $download_url;
 
@@ -18,8 +23,10 @@ class ExportCompleted extends Notification implements ShouldQueue
      *
      * @param  string  $download_url
      */
-    public function __construct($download_url)
+    public function __construct($translation, $file_name, $download_url)
     {
+        $this->translation = $translation;
+        $this->file_name = $file_name;
         $this->download_url = $download_url;
 
         $this->onQueue('notifications');
@@ -33,7 +40,7 @@ class ExportCompleted extends Notification implements ShouldQueue
      */
     public function via($notifiable)
     {
-        return ['mail'];
+        return ['mail', 'database'];
     }
 
     /**
@@ -42,11 +49,33 @@ class ExportCompleted extends Notification implements ShouldQueue
      * @param  mixed  $notifiable
      * @return \Illuminate\Notifications\Messages\MailMessage
      */
-    public function toMail($notifiable)
+    public function toMail($notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject(trans('notifications.export.completed.subject'))
+            ->from(config('mail.from.address'), config('mail.from.name'))
+            ->subject(trans('notifications.export.completed.title'))
+            ->line(new HtmlString('<br><br>'))
             ->line(trans('notifications.export.completed.description'))
             ->action(trans('general.download'), $this->download_url);
+    }
+
+    /**
+     * Get the array representation of the notification.
+     *
+     * @param  mixed  $notifiable
+     * @return array
+     */
+    public function toArray($notifiable)
+    {
+        return [
+            'title' => trans('notifications.menu.export_completed.title'),
+            'description' => trans('notifications.menu.export_completed.description', [
+                'type'  => $this->translation,
+                'url'   => $this->download_url,
+            ]),
+            'translation' => $this->translation,
+            'file_name' => $this->file_name,
+            'download_url' => $this->download_url,
+        ];
     }
 }

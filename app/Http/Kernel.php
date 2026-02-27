@@ -14,9 +14,9 @@ class Kernel extends HttpKernel
      * @var array
      */
     protected $middleware = [
-        // \App\Http\Middleware\TrustHosts::class,
+        \App\Http\Middleware\TrustHosts::class,
         \App\Http\Middleware\TrustProxies::class,
-        \Fruitcake\Cors\HandleCors::class,
+        \Illuminate\Http\Middleware\HandleCors::class,
         \Illuminate\Foundation\Http\Middleware\CheckForMaintenanceMode::class,
         \Illuminate\Foundation\Http\Middleware\ValidatePostSize::class,
         \App\Http\Middleware\TrimStrings::class,
@@ -48,12 +48,13 @@ class Kernel extends HttpKernel
         ],
 
         'api' => [
-            'api.auth',
+            'auth.basic.once',
             'auth.disabled',
             'throttle:api',
             'permission:read-api',
             'company.identify',
             'bindings',
+            'read.only',
             'language',
             'firewall.all',
         ],
@@ -62,12 +63,14 @@ class Kernel extends HttpKernel
             'web',
             'company.identify',
             'bindings',
+            'read.only',
             'wizard.redirect',
         ],
 
         'guest' => [
             'web',
             'auth.redirect',
+            'read.only',
         ],
 
         'admin' => [
@@ -76,9 +79,12 @@ class Kernel extends HttpKernel
             'auth.disabled',
             'company.identify',
             'bindings',
+            'read.only',
             'wizard.redirect',
             'menu.admin',
             'permission:read-admin-panel',
+            'plan.limits',
+            'module.subscription',
         ],
 
         'wizard' => [
@@ -87,6 +93,7 @@ class Kernel extends HttpKernel
             'auth.disabled',
             'company.identify',
             'bindings',
+            'read.only',
             'permission:read-admin-panel',
         ],
 
@@ -96,8 +103,19 @@ class Kernel extends HttpKernel
             'auth.disabled',
             'company.identify',
             'bindings',
+            'read.only',
             'menu.portal',
             'permission:read-client-portal',
+        ],
+
+        'preview' => [
+            'web',
+            'auth',
+            'auth.disabled',
+            'company.identify',
+            'bindings',
+            'read.only',
+            'permission:read-admin-panel',
         ],
 
         'signed' => [
@@ -109,20 +127,29 @@ class Kernel extends HttpKernel
             'signature',
             'company.identify',
             'bindings',
+            'read.only',
             'header.x',
             'language',
             'firewall.all',
         ],
+
+        'import' => [
+            'throttle:import',
+        ],
+
+        'email' => [
+            'throttle:email',
+        ],
     ];
 
     /**
-     * The application's route middleware.
+     * The application's middleware aliases.
      *
-     * These middleware may be assigned to groups or used individually.
+     * Aliases may be used to conveniently assign middleware to routes and groups.
      *
-     * @var array
+     * @var array<string, class-string|string>
      */
-    protected $routeMiddleware = [
+    protected $middlewareAliases = [
         // Laravel
         'auth' => \App\Http\Middleware\Authenticate::class,
         'auth.basic' => \Illuminate\Auth\Middleware\AuthenticateWithBasicAuth::class,
@@ -142,17 +169,21 @@ class Kernel extends HttpKernel
 
         // Akaunting
         'api.key' => \App\Http\Middleware\RedirectIfNoApiKey::class,
+        'auth.basic.once' => \App\Http\Middleware\AuthenticateOnceWithBasicAuth::class,
         'auth.disabled' => \App\Http\Middleware\LogoutIfUserDisabled::class,
         'auth.redirect' => \App\Http\Middleware\RedirectIfAuthenticated::class,
         'company.identify' => \App\Http\Middleware\IdentifyCompany::class,
         'dropzone' => \App\Http\Middleware\Dropzone::class,
         'header.x' => \App\Http\Middleware\AddXHeader::class,
+        'plan.limits' => \App\Http\Middleware\RedirectIfHitPlanLimits::class,
+        'module.subscription' => \App\Http\Middleware\RedirectIfHitModuleSubscription::class,
         'menu.admin' => \App\Http\Middleware\AdminMenu::class,
         'menu.portal' => \App\Http\Middleware\PortalMenu::class,
         'date.format' => \App\Http\Middleware\DateFormat::class,
         'install.can' => \App\Http\Middleware\CanInstall::class,
         'install.redirect' => \App\Http\Middleware\RedirectIfNotInstalled::class,
         'money' => \App\Http\Middleware\Money::class,
+        'read.only' => \App\Http\Middleware\CheckForReadOnlyMode::class,
         'wizard.redirect' => \App\Http\Middleware\RedirectIfWizardNotCompleted::class,
 
         // Vendor

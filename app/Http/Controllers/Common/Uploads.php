@@ -5,8 +5,8 @@ namespace App\Http\Controllers\Common;
 use App\Abstracts\Http\Controller;
 use App\Models\Common\Media;
 use App\Traits\Uploads as Helper;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\Request;
-use File;
 
 class Uploads extends Controller
 {
@@ -27,11 +27,27 @@ class Uploads extends Controller
         }
 
         // Get file path
-        if (!$path = $this->getMediaPathOnStorage($media)) {
+        if (!$this->getMediaPathOnStorage($media)) {
             return response(null, 204);
         }
 
-        return response()->file($path);
+        return $this->streamMedia($media);
+    }
+
+    public function inline($id)
+    {
+        try {
+            $media = Media::find($id);
+        } catch (\Exception $e) {
+            return response(null, 204);
+        }
+
+        // Get file path
+        if (!$this->getMediaPathOnStorage($media)) {
+            return response(null, 204);
+        }
+
+        return $this->streamMedia($media, 'inline');
     }
 
     /**
@@ -70,7 +86,7 @@ class Uploads extends Controller
         }
 
         // Get file path
-        if (!$path = $this->getMediaPathOnStorage($media)) {
+        if (!$this->getMediaPathOnStorage($media)) {
             return response()->json([
                 'success' => false,
                 'error'   => true,
@@ -82,7 +98,7 @@ class Uploads extends Controller
 
         $file = $media;
 
-        $html = view('partials.media.file', compact('file', 'column_name', 'options'))->render();
+        $html = view('components.media.file', compact('file', 'column_name', 'options'))->render();
 
         return response()->json([
             'success' => true,
@@ -108,11 +124,11 @@ class Uploads extends Controller
         }
 
         // Get file path
-        if (!$path = $this->getMediaPathOnStorage($media)) {
+        if (!$this->getMediaPathOnStorage($media)) {
             return false;
         }
 
-        return response()->download($path);
+        return $this->streamMedia($media);
     }
 
     /**
@@ -151,7 +167,7 @@ class Uploads extends Controller
 
         $media->delete(); //will not delete files
 
-        File::delete($path);
+        Storage::delete($path);
 
         if (!empty($request->input('page'))) {
             switch ($request->input('page')) {

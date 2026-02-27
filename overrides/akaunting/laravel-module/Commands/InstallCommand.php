@@ -33,6 +33,7 @@ class InstallCommand extends Command
 
         if ($this->getModel()) {
             $this->comment("Module [{$this->alias}] is already installed.");
+
             return;
         }
 
@@ -43,6 +44,8 @@ class InstallCommand extends Command
             'company_id' => $this->company_id,
             'alias' => $this->alias,
             'enabled' => '1',
+            'created_from' => source_name(),
+            'created_by' => user_id(),
         ]);
 
         $this->createHistory('installed');

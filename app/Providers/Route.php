@@ -78,6 +78,14 @@ class Route extends Provider
             ], $attributes));
         });
 
+        Facade::macro('preview', function ($alias, $routes, $attributes = []) {
+            return Facade::module($alias, $routes, array_merge([
+                'middleware'    => 'preview',
+                'prefix'        => 'preview/' . $alias,
+                'as'            => 'preview.' . $alias . '.',
+            ], $attributes));
+        });
+
         Facade::macro('portal', function ($alias, $routes, $attributes = []) {
             return Facade::module($alias, $routes, array_merge([
                 'middleware'    => 'portal',
@@ -93,6 +101,16 @@ class Route extends Provider
                 'as'            => 'signed.' . $alias . '.',
             ], $attributes));
         });
+
+        Facade::macro('api', function ($alias, $routes, $attributes = []) {
+            return Facade::module($alias, $routes, array_merge([
+                'namespace'     => 'Modules\\' . module($alias)->getStudlyName() . '\Http\Controllers\Api',
+                'domain'        => config('api.domain'),
+                'middleware'    => config('api.middleware'),
+                'prefix'        => config('api.prefix') ? config('api.prefix') . '/' . $alias : $alias,
+                'as'            => 'api.' . $alias . '.',
+            ], $attributes));
+        });
     }
 
     /**
@@ -102,6 +120,8 @@ class Route extends Provider
      */
     public function map()
     {
+        $this->configureRateLimiting();
+
         $this->mapInstallRoutes();
 
         $this->mapApiRoutes();
@@ -114,9 +134,13 @@ class Route extends Provider
 
         $this->mapAdminRoutes();
 
+        $this->mapPreviewRoutes();
+
         $this->mapPortalRoutes();
 
         $this->mapSignedRoutes();
+
+        $this->mapWebRoutes();
     }
 
     /**
@@ -143,10 +167,10 @@ class Route extends Provider
      */
     protected function mapApiRoutes()
     {
-        $this->configureRateLimiting();
-
-        Facade::prefix('api')
-            ->namespace($this->namespace)
+        Facade::prefix(config('api.prefix'))
+            ->domain(config('api.domain'))
+            ->middleware(config('api.middleware'))
+            ->namespace($this->namespace . '\Api')
             ->group(base_path('routes/api.php'));
     }
 
@@ -208,6 +232,20 @@ class Route extends Provider
             ->namespace($this->namespace)
             ->group(base_path('routes/admin.php'));
     }
+    /**
+     * Define the "preview" routes for the application.
+     *
+     * These routes all receive session state, CSRF protection, etc.
+     *
+     * @return void
+     */
+    protected function mapPreviewRoutes()
+    {
+        Facade::prefix('{company_id}/preview')
+            ->middleware('preview')
+            ->namespace($this->namespace)
+            ->group(base_path('routes/preview.php'));
+    }
 
     /**
      * Define the "portal" routes for the application.
@@ -240,6 +278,20 @@ class Route extends Provider
     }
 
     /**
+     * Define the "web" routes for the application.
+     *
+     * These routes all receive session state, CSRF protection, etc.
+     *
+     * @return void
+     */
+    protected function mapWebRoutes()
+    {
+        Facade::middleware('web')
+            ->namespace($this->namespace)
+            ->group(base_path('routes/web.php'));
+    }
+
+    /**
      * Configure the rate limiters for the application.
      *
      * @return void
@@ -247,7 +299,18 @@ class Route extends Provider
     protected function configureRateLimiting()
     {
         RateLimiter::for('api', function (Request $request) {
-            return Limit::perMinute(60);
+            return Limit::perMinute(config('app.throttles.api'));
+        });
+
+        RateLimiter::for('import', function (Request $request) {
+            return Limit::perMinute(config('app.throttles.import'));
+        });
+
+        RateLimiter::for('email', function (Request $request) {
+            return [
+                Limit::perDay(config('app.throttles.email.month'), 30),
+                Limit::perMinute(config('app.throttles.email.minute')),
+            ];
         });
     }
 }

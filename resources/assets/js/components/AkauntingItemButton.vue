@@ -1,74 +1,64 @@
 <template>
-    <div :id="'select-item-button-' + _uid" class="product-select">
-        <div class="item-add-new">
-            <button type="button" class="btn btn-link w-100" @click="onItemList">
-                <i class="fas fa-plus-circle"></i> &nbsp; {{ addItemText }}
-            </button>
-        </div>
+    <div :id="'select-item-button-' + _uid" class="w-full border-b">
+        <button type="button" class="w-full h-10 flex items-center justify-center text-purple font-medium disabled:bg-gray-200 hover:bg-gray-100" @click="showItems">
+            <span class="material-icons-outlined text-base font-bold ltr:mr-1 rtl:ml-1">add</span>
+             {{ addItemText }}
+        </button>
  
-        <div class="aka-select aka-select--fluid" :class="[{'is-open': show.item_list}]" tabindex="-1">
-            <div class="aka-select-menu" v-if="show.item_list">
-                <div class="aka-select-search-container">
-                    <span class="aka-prefixed-input aka-prefixed-input--fluid">
-                        <div class="input-group input-group-merge">
-                            <div class="input-group-prepend">
-                                <span class="input-group-text">
-                                    <i class="fa fa-search"></i>
-                                </span>
-                            </div>
+        <div :class="[{'is-open': show.item_list}]" tabindex="-1">
+            <div class="-mt-10.5 left-0 right-0 bg-white border rounded-lg" v-if="show.item_list">
+               <div class="relative">
+                   <span class="material-icons-round absolute left-4 top-3 text-lg">search</span>
+                   <input 
+                       type="text"
+                       data-input="true"
+                       class="w-full text-sm py-2.5 mt-1 border text-black placeholder-light-gray bg-white disabled:bg-gray-200 focus:outline-none focus:ring-transparent focus:border-purple px-10 border-t-0 border-l-0 border-r-0 border-gray-200 rounded-none"
+                       autocapitalize="default" 
+                       autocorrect="ON" 
+                       :placeholder="placeholder"
+                       :value="search"
+                        @input="onInput($event)"
+                       :ref="'input-item-field-' + _uid"
+                       @keydown.enter="inputEnterEvent"
+                   />
+               </div>
 
-                            <input 
-                                type="text"
-                                data-input="true"
-                                class="form-control"
-                                autocapitalize="default" autocorrect="ON" 
-                                :placeholder="placeholder"
-                                :ref="'input-item-field-' + _uid"
-                                v-model="search"
-                                @input="onInput"
-                                @keyup.enter="onInput"
-                            />
-                        </div>
-                    </span>
-                </div>
+                <div v-bind:class="(sortedItems.length > 7) ? 'h-72 overflow-y-auto' : ''">
+                    <ul class="w-full text-sm rounded-lg border-light-gray text-black placeholder-light-gray bg-white disabled:bg-gray-200 focus:outline-none focus:ring-transparent focus:border-purple p-0 mt-0 border-0 cursor-pointer">
+                        <div 
+                            class="hover:bg-gray-100 px-4" 
+                            v-for="(item, index) in sortedItems" 
+                            :key="index" 
+                            :class="isItemMatched ? 'highlightItem' : ''"
+                            @click="onItemSelected(item)"
+                        >
+                            <div class="w-full flex items-center justify-between">
+                                <span>{{ item.name }}</span>
 
-                <ul class="aka-select-menu-options">
-                    <div class="aka-select-menu-option" v-for="(item, index) in sortItems" :key="index" @click="onItemSeleted(index, item.id)">
-                        <div class="item-select w-100">
-                            <div class="item-select-column item-select-info w-75">
-                                <b class="item-select-info-name"><span>{{ item.name }}</span></b>
-                            </div>
-
-                            <div class="item-select-column item-select-price w-25">
                                 <money 
                                     :name="'item-id-' + item.id"
                                     :value="item.price"
                                     v-bind="money"
                                     masked
                                     disabled
-                                    class="text-right disabled-money"
+                                    class="ltr:text-right rtl:text-left disabled-money text-gray"
                                 ></money>
                             </div>
                         </div>
-                    </div>
 
-                    <div class="aka-select-menu-option" v-if="!sortItems.length">
-                        <div>
-                            <strong class="text-strong" v-if="!items.length && !search">
-                                <span>{{ noDataText }}</span>
-                            </strong>
+                        <div class="hover:bg-gray-100 text-center py-2 px-4" v-if="!sortedItems.length">
+                            <div class="text-center">
+                                <span v-if="!items.length && !search">{{ noDataText }}</span>
 
-                            <strong class="text-strong" v-else>
-                                <span>{{ noMatchingDataText }}</span>
-                            </strong>
+                                <span v-else>{{ noMatchingDataText }}</span>
+                            </div>
                         </div>
-                    </div>
-                </ul>
+                    </ul>
+                </div>
 
-                <div class="aka-select-footer" @click="onItemCreate">
-                    <span>
-                        <i class="fas fa-plus"></i> &nbsp; {{ createNewItemText }}
-                    </span>
+                <div class="flex items-center justify-center h-11 text-center text-purple font-bold border border-l-0 border-r-0 border-b-0 rounded-bl-lg rounded-br-lg hover:bg-gray-100 cursor-pointer" @click="onItemCreate">
+                     <span class="material-icons text-lg font-bold mr-1">add</span>
+                     {{ createNewItemText }}
                 </div>
             </div>
         </div>
@@ -84,7 +74,7 @@ import {Money} from 'v-money';
 import AkauntingModalAddNew from './AkauntingModalAddNew';
 import AkauntingModal from './AkauntingModal';
 import AkauntingMoney from './AkauntingMoney';
-import AkauntingRadioGroup from './forms/AkauntingRadioGroup';
+import AkauntingRadioGroup from './AkauntingRadioGroup';
 import AkauntingSelect from './AkauntingSelect';
 import AkauntingDate from './AkauntingDate';
 
@@ -128,7 +118,6 @@ export default {
             default: () => [],
             description: 'List of Items'
         },
-
         addNew: {
             type: Object,
             default: function () {
@@ -143,7 +132,7 @@ export default {
         },
         addItemText: {
             type: String,
-            default: 'Add an item',
+            default: 'Add New Item',
             description: ""
         },
         createNewItemText: {
@@ -187,24 +176,42 @@ export default {
             },
             description: "Default currency"
         },
+        searchUrl: {
+            type: String,
+            default: url + '/common/items',
+            description: "Search URL"
+        },
+        searchCharLimit: {
+            type: Number,
+            default: 3,
+            description: "Character limit for item search input"
+        },
+        searchListKey: {
+            type: String|Array|Object,
+            default: 'value',
+            description: "Key for search in item list"
+        },
     },
 
     data() {
         return {
             item_list: [],
             selected_items: [],
-            search: '', // search cloumn model
+            search_list_key: this.searchListKey,
+            changeBackground: true,
+            search: '', // search column model
             show: {
                 item_selected: false,
                 item_list: false,
             },
-
+            isItemMatched: false,
             form: {},
             add_new: {
                 text: this.addNew.text,
                 show: false,
                 buttons: this.addNew.buttons,
             },
+            newItems: [],
             add_new_html: '',
             money: {
                 decimal: this.currency.decimal_mark,
@@ -217,45 +224,54 @@ export default {
         };
     },
 
+    created() {
+        this.setItemList(this.items);
+    },
+
+    mounted() {
+        if (this.dynamicCurrency.code != this.currency.code) {
+            if (!this.dynamicCurrency.decimal) {
+                this.money = {
+                    decimal: this.dynamicCurrency.decimal_mark,
+                    thousands: this.dynamicCurrency.thousands_separator,
+                    prefix: (this.dynamicCurrency.symbol_first) ? this.dynamicCurrency.symbol : '',
+                    suffix: (!this.dynamicCurrency.symbol_first) ? this.dynamicCurrency.symbol : '',
+                    precision: parseInt(this.dynamicCurrency.precision),
+                    masked: this.masked
+                };
+            } else {
+                this.money = this.dynamicCurrency;
+            }
+        }
+    },
+
     methods: {
         setItemList(items) {
+            this.item_list = [];
+
+            this.search.length === 0 ? this.isItemMatched = false : {}
+
             // Option set sort_option data
-            if (!Array.isArray(items)) {
+            if (! Array.isArray(items)) {
                 let index = 0;
 
                 for (const [key, value] of Object.entries(items)) {
-                    this.item_list.push({
-                        index: index,
-                        key: key,
-                        value: value,
-                        type: 'item',
-                        id: key,
-                        name: value,
-                        description: '',
-                        price: 0,
-                        tax_ids: [], 
-                    });
+                    let list_item = this.getObjectItem(key, value, index);
+
+                    this.item_list.push(list_item);
 
                     index++;
                 }
             } else {
                 items.forEach(function (item, index) {
-                    this.item_list.push({
-                        index: index,
-                        key: item.id,
-                        value: (item.title) ? item.title : (item.display_name) ? item.display_name : item.name,
-                        type: this.type,
-                        id: item.id,
-                        name: (item.title) ? item.title : (item.display_name) ? item.display_name : item.name,
-                        description: (item.description) ? item.description : '',
-                        price: (item.price) ? item.price : (this.price == 'purchase_price') ? item.purchase_price : item.sale_price,
-                        tax_ids: (item.tax_ids) ? item.tax_ids : [],
-                    });
+                    let list_item = this.getArrayItem(item, index);
+
+                    this.item_list.push(list_item);
                 }, this);
             }
         },
 
-        onItemList() {
+        showItems() {
             this.show.item_list = true;
 
             setTimeout(function() {
@@ -263,57 +279,91 @@ export default {
             }.bind(this), 100);
         },
 
-        onInput() {
-            if (!this.search) {
+        onInput(event) {
+            this.search = event.target.value;
+
+            this.isItemMatched = false;
+
+            //to optimize performance we kept the condition that checks for if search exists or not
+            if (! this.search) {
+                this.isItemMatched = false; //to remove the style from matched item on input is cleared (option)
+
                 return;
             }
 
-            window.axios.get(url + '/common/items?search="' + this.search + '" limit:10')
-            .then(response => {
-                this.item_list = [];
+            //condition that checks if input is below the given character limit 
+            if (this.search.length < this.searchCharLimit) {
+                this.setItemList(this.items); //once the user deletes the search input, we show the overall item list
+                this.sortItems(); // we order it as wanted
 
-                let items = response.data.data;
+                this.$emit('input', this.search); // keep the input binded to v-model
 
-                items.forEach(function (item, index) {
-                    this.item_list.push({
-                        index: index,
-                        key: item.id,
-                        value: (item.title) ? item.title : (item.display_name) ? item.display_name : item.name,
-                        type: this.type,
-                        id: item.id,
-                        name: (item.title) ? item.title : (item.display_name) ? item.display_name : item.name,
-                        description: (item.description) ? item.description : '',
-                        price: (item.price) ? item.price : (this.price == 'purchase_price') ? item.purchase_price : item.sale_price,
-                        tax_ids: (item.tax_ids) ? item.tax_ids : [],
-                    });
-                }, this);
-            })
-            .catch(error => {
+                return;
+            }
 
-            });
+            this.fetchMatchedItems().then(() => this.item_list.length > 0 ? this.isItemMatched = true : this.isItemMatched = false );
 
             this.$emit('input', this.search);
+
+            this.isItemMatched === true && this.search.length > 0  ? this.isItemMatched = true : this.isItemMatched = true;
         },
 
-        onItemSeleted(index, item_id) {
-            let item = this.item_list[index];
+        inputEnterEvent() {
+            this.isItemMatched 
+                ? this.onItemSelected()
+                : this.onItemCreate()
+        },
 
+        async fetchMatchedItems() {
+            let search_limit_value = this.getSearchLimitValue();
+
+            await window.axios.get(this.searchUrl + '?search="' + this.search + '"' + ' not ' + this.price + ':NULL enabled:1 limit:10' + search_limit_value)
+                .then(response => {
+                    this.item_list = [];
+                    let items = response.data.data;
+
+                    if (response.data.search_list_key) {
+                        this.search_list_key = response.data.search_list_key;
+                    }
+
+                    items.forEach(function (item, index) {
+                        let list_item = this.getArrayItem(item, index);
+
+                        this.item_list.push(list_item);
+                    }, this);
+                })
+                .catch(error => {});
+        },
+
+        onItemSelected(clickSelectedItem) {
+            let item;
+            const firstMatchedItem = this.item_list[0];
+            const isClickSelectedItem = clickSelectedItem ? true : false;
+            isClickSelectedItem ? item = clickSelectedItem  : item = firstMatchedItem;
+            const indexeditem = { ...item, index: this.currentIndex };
+
+            this.addItem(indexeditem, 'oldItem');
+            this.changeBackground = false;
+        },
+
+        addItem(item, itemType) {
             this.selected_items.push(item);
 
-            this.$emit('item', item);
+            this.$emit('item',  { item, itemType } );
             this.$emit('items', this.selected_items);
 
             this.show.item_selected = false;
             this.show.item_list = false;
+
             this.search = '';
+
+            // Set default item list
+            this.setItemList(this.items);
         },
 
         onItemCreate() {
-            let index = Object.keys(this.item_list).length;
-            index++;
-
             let item = {
-                index: index,
+                index: this.currentIndex,
                 key: 0,
                 value: this.search,
                 type: this.type,
@@ -324,67 +374,9 @@ export default {
                 tax_ids: [],
             };
 
-            this.selected_items.push(item);
+            this.newItems.push(item);
 
-            this.$emit('item', item);
-            this.$emit('items', this.selected_items);
-
-            this.setItemList(this.items);
-
-            this.show.item_selected = false;
-            this.show.item_list = false;
-            this.search = '';
-
-            /*
-            let add_new = this.add_new;
-
-            window.axios.get(this.createRoute)
-            .then(response => {
-                add_new.show = true;
-                add_new.html = response.data.html;
-
-                this.add_new_html = Vue.component('add-new-component', function (resolve, reject) {
-                    resolve({
-                        template: '<div><akaunting-modal-add-new :show="add_new.show" @submit="onSubmit" @cancel="onCancel" :buttons="add_new.buttons" :title="add_new.text" :is_component=true :message="add_new.html"></akaunting-modal-add-new></div>',
-
-                        components: {
-                            [Select.name]: Select,
-                            [Option.name]: Option,
-                            [OptionGroup.name]: OptionGroup,
-                            [ColorPicker.name]: ColorPicker,
-                            AkauntingModalAddNew,
-                            AkauntingModal,
-                            AkauntingMoney,
-                            AkauntingRadioGroup,
-                            AkauntingSelect,
-                            AkauntingDate,
-                        },
-
-                        data: function () {
-                            return {
-                                add_new: add_new,
-                            }
-                        },
-
-                        methods: {
-                            onSubmit(event) {
-                                this.$emit('submit', event);
-                            },
-
-                            onCancel(event) {
-                                this.$emit('cancel', event);
-                            }
-                        }
-                    })
-                });
-            })
-            .catch(e => {
-                console.log(e);
-            })
-            .finally(function () {
-                // always executed
-            });
-            */
+            this.addItem(item, 'newItem');
         },
 
         onSubmit(event) {
@@ -431,17 +423,9 @@ export default {
                 if (response.data.success) {
                     let item = response.data.data;
 
-                    this.item_list.push({
-                        index: index,
-                        key: item.id,
-                        value: (item.title) ? item.title : (item.display_name) ? item.display_name : item.name,
-                        type: this.type,
-                        id: item.id,
-                        name: (item.title) ? item.title : (item.display_name) ? item.display_name : item.name,
-                        description: (item.description) ? item.description : '',
-                        price: (item.price) ? item.price : (this.price == 'purchase_price') ? item.purchase_price : item.sale_price,
-                        tax_ids: (item.tax_ids) ? item.tax_ids : [],
-                    });
+                    let list_item = this.getArrayItem(item, index);
+
+                    this.item_list.push(list_item);
 
                     this.add_new.show = false;
 
@@ -452,7 +436,7 @@ export default {
 
                     let documentClasses = document.body.classList;
 
-                    documentClasses.remove("modal-open");
+                    documentClasses.remove('overflow-y-hidden', 'overflow-overlay');
                 }
             })
             .catch(error => {
@@ -471,7 +455,7 @@ export default {
 
             let documentClasses = document.body.classList;
 
-            documentClasses.remove("modal-open");
+            documentClasses.remove('overflow-y-hidden', 'overflow-overlay');
         },
 
         closeIfClickedOutside(event) {
@@ -481,15 +465,11 @@ export default {
                 this.search = '';
 
                 document.removeEventListener('click', this.closeIfClickedOutside);
+
+                this.setItemList(this.items);
             }
         },
-    },
 
-    created() {
-        this.setItemList(this.items);
-    },
-
-    computed: {
         sortItems() {
             this.item_list.sort(function (a, b) {
                 var nameA = a.value.toUpperCase(); // ignore upper and lowercase
@@ -507,15 +487,144 @@ export default {
                 return 0;
             });
 
-            return this.item_list.filter(item => {
-                return item.value.toLowerCase().includes(this.search.toLowerCase())
-            });
+            const sortedItemList = this.item_list.filter((item, index, items) => {
+                if (typeof this.search_list_key === 'string') {
+                    return item[this.search_list_key].toLowerCase().includes(this.search.toLowerCase());
+                }
+
+                if (Array.isArray(this.search_list_key)) {
+                    return this.search_list_key.some(key => item[key].toLowerCase().includes(this.search.toLowerCase()));
+                }
+
+                if (typeof this.search_list_key === 'object') {
+                    return Object.keys(this.search_list_key).some(key => item[key].toLowerCase().includes(this.search.toLowerCase()));
+                }
+
+                return false;
+            }, this);
+
+            return sortedItemList;
+        },
+
+        getSearchLimitValue() {
+            let value = '';
+
+            if (typeof this.search_list_key === 'string' && this.search_list_key !== 'value') {
+                value += ' or ' + this.search_list_key + ' = "' + this.search + '" not ' + this.price + ':NULL enabled:1 limit:10';
+            } else if (Array.isArray(this.search_list_key)) {
+                this.search_list_key.forEach(key => {
+                    if (key !== 'value') {
+                        value += ' or ' + key + ' = "' + this.search + '" not ' + this.price + ':NULL enabled:1 limit:10';
+                    }
+                });
+            } else if (typeof this.search_list_key === 'object') {
+                Object.keys(this.search_list_key).forEach(key => {
+                    if (key !== 'value') {
+                        value += ' or ' + key + ' = "' + this.search + '" not ' + this.price + ':NULL enabled:1 limit:10';
+                    }
+                });
+            }
+
+            return value;
+        },
+
+        getObjectItem(key, value, index) {
+            let item = {
+                index: index,
+                key: key,
+                value: value,
+                type: 'item',
+                id: key,
+                name: value,
+                description: '',
+                price: 0,
+                tax_ids: [],
+            };
+
+            if (typeof this.search_list_key === 'string' && this.search_list_key !== 'value') {
+                item[this.search_list_key] = value;
+            }
+
+            if (Array.isArray(this.search_list_key)) {
+                this.search_list_key.forEach(key => {
+                    if (key !== 'value') {
+                        item[key] = value;
+                    }
+                });
+            } else if (typeof this.search_list_key === 'object') {
+                Object.keys(this.search_list_key).forEach(key => {
+                    if (key !== 'value') {
+                        item[key] = value;
+                    }
+                });
+            }
+
+            return item;
+        },
+
+        getArrayItem(item, index) {
+            let list_item = {
+                index: index,
+                key: item.id,
+                value: (item.title) ? item.title : (item.display_name) ? item.display_name : item.name,
+                type: this.type,
+                id: item.id,
+                name: (item.title) ? item.title : (item.display_name) ? item.display_name : item.name,
+                description: (item.description) ? item.description : '',
+                price: (item.price) ? item.price : (this.price == 'purchase_price') ? item.purchase_price : item.sale_price,
+                tax_ids: (item.tax_ids) ? item.tax_ids : [],
+            };
+
+            if (typeof this.search_list_key === 'string' && this.search_list_key !== 'value') {
+                list_item[this.search_list_key] = (item[this.search_list_key]) ? item[this.search_list_key] : '';
+            }
+
+            if (Array.isArray(this.search_list_key)) {
+                this.search_list_key.forEach(key => {
+                    if (key !== 'value') {
+                        list_item[key] = item[key]
+                        ? item[key]
+                        : (key.indexOf('.') > -1
+                            ? (item[key.split('.')[0]]
+                                ? (item[key.split('.')[0]][key.split('.')[1]]
+                                    ? item[key.split('.')[0]][key.split('.')[1]]
+                                    : '')
+                                : '')
+                            : '');
+                    }
+                }, this);
+            } else if (typeof this.search_list_key === 'object') {
+                Object.keys(this.search_list_key).forEach(key => {
+                    if (key !== 'value') {
+                        list_item[key] = item[key]
+                        ? item[key]
+                        : (key.indexOf('.') > -1
+                            ? (item[key.split('.')[0]]
+                                ? (item[key.split('.')[0]][key.split('.')[1]]
+                                    ? item[key.split('.')[0]][key.split('.')[1]]
+                                    : '')
+                                : '')
+                            : '');
+                    }
+                }, this);
+            }
+
+            return list_item;
+        },
+    },
+
+    computed: {
+        sortedItems() {
+            return this.sortItems();
+        },
+        currentIndex() {
+            return this.$root.form.items.length;
         },
     },
 
     watch: {
         dynamicCurrency: function (currency) {
-            if (!currency) {
+            if (! currency) {
                 return;
             }
 
@@ -523,7 +632,7 @@ export default {
                 decimal: currency.decimal_mark,
                 thousands: currency.thousands_separator,
                 prefix: (currency.symbol_first) ? currency.symbol : '',
-                suffix: (!currency.symbol_first) ? currency.symbol : '',
+                suffix: (! currency.symbol_first) ? currency.symbol : '',
                 precision: parseInt(currency.precision),
                 masked: this.masked
             };
@@ -540,3 +649,9 @@ export default {
     },
 };
 </script>
+
+<style scoped>
+    .highlightItem:first-child {
+        background-color: #F5F7FA;
+    }
+</style>

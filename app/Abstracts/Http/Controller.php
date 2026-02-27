@@ -3,23 +3,22 @@
 namespace App\Abstracts\Http;
 
 use App\Abstracts\Http\Response;
-use App\Jobs\Auth\NotifyUser;
-use App\Jobs\Common\CreateMediableForExport;
-use App\Notifications\Common\ImportCompleted;
 use App\Traits\Jobs;
 use App\Traits\Permissions;
 use App\Traits\Relationships;
+use App\Traits\SearchString;
+use App\Utilities\Export;
+use App\Utilities\Import;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Foundation\Validation\ValidatesRequests;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Routing\Controller as BaseController;
-use Illuminate\Support\Str;
 
 abstract class Controller extends BaseController
 {
-    use AuthorizesRequests, Jobs, Permissions, Relationships, ValidatesRequests;
+    use AuthorizesRequests, Jobs, Permissions, Relationships, SearchString, ValidatesRequests;
 
     /**
      * Instantiate a new controller instance.
@@ -39,9 +38,9 @@ abstract class Controller extends BaseController
      *
      * @return LengthAwarePaginator
      */
-    public function paginate($items, $perPage = 15, $page = null, $options = [])
+    public function paginate($items, $perPage = null, $page = null, $options = [])
     {
-        $perPage = $perPage ?: request('limit', setting('default.list_limit', '25'));
+        $perPage = $perPage ?: (int) request('limit', setting('default.list_limit', '25'));
 
         $page = $page ?: (Paginator::resolveCurrentPage() ?: 1);
 
@@ -78,57 +77,11 @@ abstract class Controller extends BaseController
      * @param $request
      * @param $translation
      *
-     * @return mixed
+     * @return array
      */
     public function importExcel($class, $request, $translation)
     {
-        try {
-            $file = $request->file('import');
-
-            if (should_queue()) {
-                $class->queue($file)->onQueue('imports')->chain([
-                    new NotifyUser(user(), new ImportCompleted),
-                ]);
-
-                $message = trans('messages.success.import_queued', ['type' => $translation]);
-            } else {
-                $class->import($file);
-
-                $message = trans('messages.success.imported', ['type' => $translation]);
-            }
-
-            $response = [
-                'success'   => true,
-                'error'     => false,
-                'data'      => null,
-                'message'   => $message,
-            ];
-        } catch (\Throwable $e) {
-            if ($e instanceof \Maatwebsite\Excel\Validators\ValidationException) {
-                foreach ($e->failures() as $failure) {
-                    $message = trans('messages.error.import_column', [
-                        'message'   => collect($failure->errors())->first(),
-                        'column'    => $failure->attribute(),
-                        'line'      => $failure->row(),
-                    ]);
-
-                    flash($message)->error()->important();
-                }
-
-                $message = '';
-            } else {
-                $message = $e->getMessage();
-            }
-
-            $response = [
-                'success'   => false,
-                'error'     => true,
-                'data'      => null,
-                'message'   => $message,
-            ];
-        }
-
-        return $response;
+        return Import::fromExcel($class, $request, $translation);
     }
 
     /**
@@ -142,26 +95,62 @@ abstract class Controller extends BaseController
      */
     public function exportExcel($class, $translation, $extension = 'xlsx')
     {
-        try {
-            $file_name = Str::filename($translation) . '.' . $extension;
+        return Export::toExcel($class, $translation, $extension);
+    }
 
-            if (should_queue()) {
-                $class->queue($file_name)->onQueue('exports')->chain([
-                    new CreateMediableForExport(user(), $file_name),
-                ]);
+    public function setActiveTabForDocuments(): void
+    {
+        // Added this method to set the active tab for documents
+        if (! request()->has('list_records') && ! request()->has('search')) {
+            $tab_pins = setting('favorites.tab.' . user()->id, []);
+            $tab_pins = ! empty($tab_pins) ? json_decode($tab_pins, true) : [];
 
-                $message = trans('messages.success.export_queued', ['type' => $translation]);
+            if (! empty($tab_pins) && ! empty($tab_pins[$this->type])) {
+                $data = config('type.document.' . $this->type . '.route.params.' . $tab_pins[$this->type]);
 
-                flash($message)->success();
-
-                return back();
-            } else {
-                return $class->download($file_name);
+                if (! empty($data)) {
+                    request()->merge($data);
+                }
             }
-        } catch (\Throwable $e) {
-            flash($e->getMessage())->error()->important();
+        }
 
-            return back();
+        if (request()->get('list_records') == 'all') {
+            return;
+        }
+
+        $status = $this->getSearchStringValue('status');
+
+        if (empty($status)) {
+            $search = config('type.document.' . $this->type . '.route.params.unpaid.search');
+
+            request()->offsetSet('search', $search);
+            request()->offsetSet('programmatic', '1');
+        } else {
+            $unpaid = str_replace('status:', '', config('type.document.' . $this->type . '.route.params.unpaid.search'));
+            $draft = str_replace('status:', '', config('type.document.' . $this->type . '.route.params.draft.search'));
+
+            if (($status == $unpaid) || ($status == $draft)) {
+                return;
+            }
+
+            request()->offsetSet('list_records', 'all');
+        }
+    }
+
+    public function setActiveTabForTransactions(): void
+    {
+        // Added this method to set the active tab for transactions
+        if (! request()->has('list_records') && ! request()->has('search')) {
+            $tab_pins = setting('favorites.tab.' . user()->id, []);
+            $tab_pins = ! empty($tab_pins) ? json_decode($tab_pins, true) : [];
+
+            if (! empty($tab_pins) && ! empty($tab_pins['transactions'])) {
+                $data = config('type.transaction.transactions.route.params.' . $tab_pins['transactions']);
+
+                if (! empty($data)) {
+                    request()->merge($data);
+                }
+            }
         }
     }
 }

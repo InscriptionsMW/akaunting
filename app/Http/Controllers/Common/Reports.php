@@ -4,12 +4,12 @@ namespace App\Http\Controllers\Common;
 
 use App\Abstracts\Http\Controller;
 use App\Http\Requests\Common\Report as Request;
+use App\Http\Requests\Common\ReportShow as ShowRequest;
 use App\Jobs\Common\CreateReport;
 use App\Jobs\Common\DeleteReport;
 use App\Jobs\Common\UpdateReport;
 use App\Models\Common\Report;
 use App\Utilities\Reports as Utility;
-use Illuminate\Support\Facades\Cache;
 
 class Reports extends Controller
 {
@@ -24,6 +24,7 @@ class Reports extends Controller
         $this->middleware('permission:update-common-reports')->only('edit', 'update', 'enable', 'disable');
         $this->middleware('permission:delete-common-reports')->only('destroy');
     }
+
     /**
      * Display a listing of the resource.
      *
@@ -36,7 +37,7 @@ class Reports extends Controller
         $reports = Report::orderBy('name')->get();
 
         foreach ($reports as $report) {
-            if (!Utility::canShow($report->class)) {
+            if (Utility::cannotShow($report->class)) {
                 continue;
             }
 
@@ -46,35 +47,36 @@ class Reports extends Controller
                 continue;
             }
 
-            $ttl = 3600 * 6; // 6 hours
-
-            $totals[$report->id] = Cache::remember('reports.totals.' . $report->id, $ttl, function () use ($class) {
-                return $class->getGrandTotal();
-            });
-
             $icons[$report->id] = $class->getIcon();
-            $categories[$class->getCategory()][] = $report;
+
+            if (empty($categories[$class->getCategory()])) {
+                $categories[$class->getCategory()] = [
+                    'name' => $class->getCategory(),
+                    'description' => $class->getCategoryDescription(),
+                    'reports' => [$report],
+                ];
+            } else {
+                $categories[$class->getCategory()]['reports'][] = $report;
+            }
         }
 
-        return $this->response('common.reports.index', compact('categories', 'totals', 'icons'));
+        return $this->response('common.reports.index', compact('categories', 'icons'));
     }
 
     /**
      * Show the form for viewing the specified resource.
      *
      * @param  Report $report
+     * @param  ShowRequest $request
      * @return Response
      */
-    public function show(Report $report)
+    public function show(Report $report, ShowRequest $request)
     {
-        if (!Utility::canShow($report->class)) {
+        if (Utility::cannotShow($report->class)) {
             abort(403);
         }
 
         $class = Utility::getClassInstance($report);
-
-        // Update cache
-        Cache::put('reports.totals.' . $report->id, $class->getGrandTotal());
 
         return $class->show();
     }
@@ -104,7 +106,7 @@ class Reports extends Controller
         if ($response['success']) {
             $response['redirect'] = route('reports.index');
 
-            $message = trans('messages.success.added', ['type' => trans_choice('general.reports', 1)]);
+            $message = trans('messages.success.created', ['type' => trans_choice('general.reports', 1)]);
 
             flash($message)->success();
         } else {
@@ -214,11 +216,26 @@ class Reports extends Controller
      */
     public function print(Report $report)
     {
-        if (!Utility::canShow($report->class)) {
+        if (Utility::cannotShow($report->class)) {
             abort(403);
         }
 
         return Utility::getClassInstance($report)->print();
+    }
+
+    /**
+     * Download PDF file of the report.
+     *
+     * @param  Report $report
+     * @return Response
+     */
+    public function pdf(Report $report)
+    {
+        if (Utility::cannotShow($report->class)) {
+            abort(403);
+        }
+
+        return Utility::getClassInstance($report)->pdf();
     }
 
     /**
@@ -229,7 +246,7 @@ class Reports extends Controller
      */
     public function export(Report $report)
     {
-        if (!Utility::canShow($report->class)) {
+        if (Utility::cannotShow($report->class)) {
             abort(403);
         }
 
@@ -256,7 +273,7 @@ class Reports extends Controller
 
         $fields = (new $class())->getFields();
 
-        $html = view('partials.reports.fields', compact('fields'))->render();
+        $html = view('components.reports.fields', compact('fields'))->render();
 
         return response()->json([
             'success' => true,
@@ -264,23 +281,5 @@ class Reports extends Controller
             'message' => '',
             'html' => $html,
         ]);
-    }
-
-    /**
-     * Clear the cache of the resource.
-     *
-     * @return Response
-     */
-    public function clear()
-    {
-        Report::all()->each(function ($report) {
-            if (!Utility::canShow($report->class)) {
-                return;
-            }
-
-            Cache::put('reports.totals.' . $report->id, Utility::getClassInstance($report)->getGrandTotal());
-        });
-
-        return redirect()->back();
     }
 }

@@ -13,6 +13,7 @@ class AddCustomers extends Listener
     protected $classes = [
         'App\Reports\IncomeSummary',
         'App\Reports\IncomeExpenseSummary',
+        'App\Reports\DiscountSummary',
     ];
 
     /**
@@ -28,7 +29,8 @@ class AddCustomers extends Listener
         }
 
         $event->class->filters['customers'] = $this->getCustomers(true);
-        $event->class->filters['routes']['customers'] = 'customers.index';
+        $event->class->filters['routes']['customers'] = ['customers.index', 'search=enabled:1'];
+        $event->class->filters['multiple']['customers'] = true;
     }
 
     /**
